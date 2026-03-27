@@ -104,13 +104,6 @@ function LoginPageContent() {
           className="rounded-2xl p-8"
           style={{ background: 'white', boxShadow: '0 8px 40px rgba(0,0,0,0.10)' }}
         >
-          <h2 className="text-base font-semibold mb-1" style={{ color: '#1e2a3a' }}>
-            Inicia sesión
-          </h2>
-          <p className="text-sm mb-6" style={{ color: '#718096' }}>
-            Usa tu cuenta de Google corporativa para acceder.
-          </p>
-
           {/* Error message */}
           {errorKey && ERROR_MESSAGES[errorKey] && (
             <div
@@ -157,9 +150,6 @@ function LoginPageContent() {
           </button>
         </div>
 
-        <p className="text-center text-xs mt-6" style={{ color: '#a0aec0' }}>
-          Solo cuentas corporativas con acceso autorizado pueden ingresar.
-        </p>
       </div>
     </div>
   )
