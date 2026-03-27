@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary:       #00C4A0;
+  --primary-dark:  #00A888;
+  --primary-light: #E0F7F4;
+  --dark:          #1e2a3a;
+  --dark-2:        #2d3748;
+  --gray-50:       #f7fafc;
+  --gray-100:      #f0f4f8;
+  --gray-200:      #e2e8f0;
+  --gray-400:      #a0aec0;
+  --gray-600:      #718096;
+  --gray-900:      #1a202c;
+  --white:         #ffffff;
+  --shadow:        0 4px 20px rgba(0,0,0,0.08);
+  --shadow-hover:  0 8px 32px rgba(0,0,0,0.14);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--gray-50);
+  color: var(--gray-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--gray-100);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--gray-400);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-600);
+}
+
+/* Animaciones globales */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes botEnter {
+  0%   { opacity: 0; transform: scale(0.7); }
+  50%  { opacity: 1; transform: scale(1.08); }
+  75%  { transform: scale(0.97); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes pulseDot {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+  40%            { transform: scale(1.1); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in    { animation: fadeIn 0.5s ease-in-out; }
+.animate-slide-up   { animation: slideUp 0.4s ease-out; }
+.animate-bot-enter  { animation: botEnter 1.8s ease-in-out forwards; }
+.animate-fade-out   { animation: fadeOut 0.6s ease-in-out forwards; }
+
+/* Chat bubbles */
+.bubble-bot {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 0 18px 18px 18px;
+  box-shadow: var(--shadow);
+  color: var(--dark);
+}
+
+.bubble-user {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  border-radius: 18px 18px 0 18px;
+  color: white;
+}
+
+/* Typing dots */
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gray-400);
+  animation: pulseDot 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Score badge */
+.score-ring {
+  background: conic-gradient(var(--primary) var(--score-pct), var(--gray-200) 0);
+}

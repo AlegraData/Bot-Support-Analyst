@@ -1,0 +1,40 @@
+steps:
+  # Paso 1: Build de la imagen Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        docker build \
+          --build-arg "NEXT_PUBLIC_APP_URL=${_NEXT_PUBLIC_APP_URL}" \
+          -t northamerica-south1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/alegra-talent-bot/alegra-talent-bot:${COMMIT_SHA} .
+
+  # Paso 2: Push al Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'northamerica-south1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/alegra-talent-bot/alegra-talent-bot:$COMMIT_SHA'
+
+  # Paso 3: Deploy en Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'alegra-talent-bot'
+      - '--image'
+      - 'northamerica-south1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/alegra-talent-bot/alegra-talent-bot:$COMMIT_SHA'
+      - '--region'
+      - 'northamerica-south1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=DATABASE_URL=$_DATABASE_URL,GEMINI_API_KEY=$_GEMINI_API_KEY,NEXT_PUBLIC_APP_URL=$_NEXT_PUBLIC_APP_URL'
+
+substitutions:
+  _NEXT_PUBLIC_APP_URL: ''
+  _DATABASE_URL: ''
+  _GEMINI_API_KEY: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY

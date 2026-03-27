@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Candidate {
+  id           String          @id @default(cuid())
+  name         String
+  email        String          @unique
+  teamtailorId String
+  status       CandidateStatus @default(PENDING)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  challenges   Challenge[]
+
+  @@map("candidates")
+}
+
+enum CandidateStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Challenge {
+  id           String    @id @default(cuid())
+  candidateId  String
+  candidate    Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  score        Float?
+  feedback     String?   @db.Text
+  strengths    String[]
+  improvements String[]
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("challenges")
+}
+
+model Message {
+  id          String      @id @default(cuid())
+  challengeId String
+  challenge   Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  role        MessageRole
+  content     String      @db.Text
+  createdAt   DateTime    @default(now())
+
+  @@map("messages")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  category  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_base")
+}
