@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import type { SessionData, CandidateWithChallenge } from '@/lib/types'
+import { createClient } from '@/lib/supabase/client'
+import type { SessionData, CandidateWithChallenge, CandidateFullDetail, FullMessage } from '@/lib/types'
 import { getScoreLevel } from '@/lib/constants'
 
 export default function AdminPage() {
@@ -16,19 +17,19 @@ export default function AdminPage() {
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateWithChallenge | null>(null)
 
   useEffect(() => {
-    const raw = sessionStorage.getItem('alegra_session')
-    if (!raw) { router.replace('/login'); return }
-    const s: SessionData = JSON.parse(raw)
-    if (s.role !== 'admin') { router.replace('/login'); return }
-    setSession(s)
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(data => {
+        if (data.error || data.role !== 'admin') { router.replace('/login'); return }
+        setSession({ email: data.email, role: 'admin', name: data.name })
+      })
+      .catch(() => router.replace('/login'))
   }, [router])
 
-  const fetchCandidates = useCallback(async (email: string) => {
+  const fetchCandidates = useCallback(async () => {
     setLoadingData(true)
     try {
-      const res = await fetch('/api/candidates', {
-        headers: { 'x-user-email': email },
-      })
+      const res = await fetch('/api/candidates')
       const data = await res.json()
       setCandidates(data)
     } catch { /* silent */ }
@@ -36,7 +37,7 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => {
-    if (session) fetchCandidates(session.email)
+    if (session) fetchCandidates()
   }, [session, fetchCandidates])
 
   if (!session) return null
@@ -97,8 +98,9 @@ export default function AdminPage() {
             </span>
           </div>
           <button
-            onClick={() => {
-              sessionStorage.removeItem('alegra_session')
+            onClick={async () => {
+              const supabase = createClient()
+              await supabase.auth.signOut()
               router.replace('/login')
             }}
             className="text-xs px-3 py-1.5 rounded-lg transition-colors"
@@ -186,8 +188,7 @@ export default function AdminPage() {
                       key={c.id}
                       candidate={c}
                       index={i}
-                      email={session.email}
-                      onRefresh={() => fetchCandidates(session.email)}
+                      onRefresh={() => fetchCandidates()}
                       onViewDetail={() => setSelectedCandidate(c)}
                     />
                   ))}
@@ -201,16 +202,15 @@ export default function AdminPage() {
       {/* Add candidate modal */}
       {showForm && (
         <AddCandidateModal
-          email={session.email}
           onClose={() => setShowForm(false)}
           onSuccess={() => {
             setShowForm(false)
-            fetchCandidates(session.email)
+            fetchCandidates()
           }}
         />
       )}
 
-      {/* Detail modal */}
+      {/* Detail slide panel */}
       {selectedCandidate && (
         <CandidateDetailModal
           candidate={selectedCandidate}
@@ -269,11 +269,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function CandidateRow({
-  candidate, index, email, onRefresh, onViewDetail,
+  candidate, index, onRefresh, onViewDetail,
 }: {
   candidate: CandidateWithChallenge
   index: number
-  email: string
   onRefresh: () => void
   onViewDetail: () => void
 }) {
@@ -285,20 +284,14 @@ function CandidateRow({
   async function handleDelete() {
     if (!confirm(`¿Eliminar a ${candidate.name}? Esta acción no se puede deshacer.`)) return
     setDeleting(true)
-    await fetch(`/api/candidates/${candidate.id}`, {
-      method: 'DELETE',
-      headers: { 'x-user-email': email },
-    })
+    await fetch(`/api/candidates/${candidate.id}`, { method: 'DELETE' })
     onRefresh()
   }
 
   async function handleReset() {
     if (!confirm(`¿Reiniciar la evaluación de ${candidate.name}?`)) return
     setResetting(true)
-    await fetch(`/api/candidates/${candidate.id}`, {
-      method: 'PATCH',
-      headers: { 'x-user-email': email },
-    })
+    await fetch(`/api/candidates/${candidate.id}`, { method: 'PATCH' })
     onRefresh()
   }
 
@@ -394,9 +387,9 @@ function CandidateRow({
 }
 
 function AddCandidateModal({
-  email, onClose, onSuccess,
+  onClose, onSuccess,
 }: {
-  email: string; onClose: () => void; onSuccess: () => void
+  onClose: () => void; onSuccess: () => void
 }) {
   const [form, setForm] = useState({ name: '', email: '', teamtailorId: '' })
   const [loading, setLoading] = useState(false)
@@ -410,10 +403,7 @@ function AddCandidateModal({
 
     const res = await fetch('/api/candidates', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-user-email': email,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     })
     const data = await res.json()
@@ -528,95 +518,338 @@ function CandidateDetailModal({
 }: {
   candidate: CandidateWithChallenge; onClose: () => void
 }) {
-  const challenge = candidate.challenges[0]
-  const scoreInfo = challenge?.score ? getScoreLevel(challenge.score) : null
+  const [detail, setDetail] = useState<CandidateFullDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  if (!challenge) return null
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true))
+    fetch(`/api/candidates/${candidate.id}`)
+      .then(r => r.json())
+      .then(data => { setDetail(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [candidate.id])
+
+  useEffect(() => {
+    if (!loading) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [loading])
+
+  function handleClose() {
+    setVisible(false)
+    setTimeout(onClose, 280)
+  }
+
+  async function handleDownload() {
+    if (!detail) return
+    setDownloading(true)
+    try {
+      const { generateConversationDoc } = await import('@/lib/generateDoc')
+      const blob = await generateConversationDoc(detail)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Evaluacion_${candidate.name.replace(/\s+/g, '_')}_Alegra.docx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const challenge   = detail?.challenges[0] ?? candidate.challenges[0]
+  const scoreInfo   = challenge?.score != null ? getScoreLevel(challenge.score) : null
+  const messages    = (detail?.challenges[0]?.messages ?? []).filter(m => m.role !== 'system')
+  const pct         = challenge?.score != null ? (challenge.score / 10) * 100 : 0
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}
-    >
+    <>
+      {/* Backdrop */}
       <div
-        className="w-full max-w-lg rounded-2xl p-6 animate-slide-up overflow-y-auto"
-        style={{ background: 'white', boxShadow: '0 24px 64px rgba(0,0,0,0.18)', maxHeight: '85vh' }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-40 transition-opacity duration-300"
+        style={{
+          background: 'rgba(15,23,42,0.55)',
+          backdropFilter: 'blur(3px)',
+          opacity: visible ? 1 : 0,
+        }}
+        onClick={handleClose}
+      />
+
+      {/* Slide panel */}
+      <div
+        className="fixed top-0 right-0 z-50 h-full flex flex-col"
+        style={{
+          width: 'min(960px, 100vw)',
+          background: 'white',
+          boxShadow: '-8px 0 48px rgba(0,0,0,0.18)',
+          transform: visible ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.3s cubic-bezier(0.32,0.72,0,1)',
+        }}
       >
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h3 className="text-base font-semibold" style={{ color: '#1e2a3a' }}>{candidate.name}</h3>
-            <p className="text-xs" style={{ color: '#a0aec0' }}>{candidate.email}</p>
+        {/* ── Header ── */}
+        <div
+          className="flex items-center justify-between px-6 py-4 flex-shrink-0"
+          style={{ borderBottom: '1px solid #e2e8f0' }}
+        >
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleClose}
+              className="flex items-center justify-center rounded-xl w-8 h-8 transition-colors"
+              style={{ background: '#f0f4f8', color: '#718096' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+              </svg>
+            </button>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#1e2a3a' }}>{candidate.name}</p>
+              <p className="text-xs" style={{ color: '#a0aec0' }}>{candidate.email}</p>
+            </div>
           </div>
+
           <button
-            onClick={onClose}
-            className="flex items-center justify-center rounded-full w-8 h-8"
-            style={{ background: '#f0f4f8', color: '#718096' }}
+            onClick={handleDownload}
+            disabled={downloading || loading || !detail}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all"
+            style={{
+              background: downloading || loading ? '#a0aec0' : 'linear-gradient(135deg, #00C4A0, #00A888)',
+              boxShadow: downloading || loading ? 'none' : '0 4px 14px rgba(0,196,160,0.35)',
+              cursor: downloading || loading ? 'not-allowed' : 'pointer',
+            }}
           >
-            ✕
+            {downloading ? (
+              <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4"/>
+                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
+            )}
+            {downloading ? 'Generando...' : 'Descargar .docx'}
           </button>
         </div>
 
-        {/* Score */}
-        {challenge.score && scoreInfo && (
+        {/* ── Body: dos columnas ── */}
+        <div className="flex flex-1 overflow-hidden">
+
+          {/* Columna izquierda — Evaluación */}
           <div
-            className="flex items-center justify-between p-4 rounded-xl mb-4"
-            style={{ background: 'rgba(0,196,160,0.07)', border: '1px solid rgba(0,196,160,0.2)' }}
+            className="w-72 flex-shrink-0 overflow-y-auto p-5 space-y-4"
+            style={{ borderRight: '1px solid #e2e8f0', background: '#fafcff' }}
           >
-            <div>
-              <p className="text-xs font-medium" style={{ color: '#718096' }}>Puntaje final</p>
-              <p className="text-2xl font-bold mt-0.5" style={{ color: scoreInfo.color }}>
-                {challenge.score.toFixed(1)}<span className="text-sm font-normal" style={{ color: '#a0aec0' }}>/10</span>
-              </p>
-              <p className="text-xs font-semibold mt-0.5" style={{ color: scoreInfo.color }}>{scoreInfo.label}</p>
-            </div>
-            {challenge.completedAt && (
-              <div className="text-right">
-                <p className="text-xs" style={{ color: '#a0aec0' }}>Completado</p>
-                <p className="text-xs font-medium mt-0.5" style={{ color: '#2d3748' }}>
-                  {format(new Date(challenge.completedAt), "d MMM yyyy, HH:mm", { locale: es })}
-                </p>
+            {/* Score ring */}
+            {challenge?.score != null && scoreInfo && (
+              <div
+                className="rounded-2xl p-5 text-center"
+                style={{ background: 'white', border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+              >
+                <div className="flex justify-center mb-3">
+                  <div className="relative" style={{ width: 88, height: 88 }}>
+                    <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90">
+                      <circle cx="44" cy="44" r="36" stroke="#e2e8f0" strokeWidth="7" fill="none"/>
+                      <circle
+                        cx="44" cy="44" r="36"
+                        stroke={scoreInfo.color}
+                        strokeWidth="7"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 36}`}
+                        strokeDashoffset={`${2 * Math.PI * 36 * (1 - pct / 100)}`}
+                        style={{ transition: 'stroke-dashoffset 1s ease' }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-xl font-bold" style={{ color: scoreInfo.color, lineHeight: 1 }}>
+                        {challenge.score.toFixed(1)}
+                      </span>
+                      <span className="text-xs" style={{ color: '#a0aec0' }}>/10</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm font-bold" style={{ color: scoreInfo.color }}>{scoreInfo.label}</p>
+                {challenge.completedAt && (
+                  <p className="text-xs mt-1" style={{ color: '#a0aec0' }}>
+                    {format(new Date(challenge.completedAt), "d MMM yyyy, HH:mm", { locale: es })}
+                  </p>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Feedback */}
-        {challenge.feedback && (
-          <div className="mb-4">
-            <p className="text-xs font-semibold mb-2" style={{ color: '#2d3748' }}>Resumen de evaluación</p>
-            <p className="text-sm leading-relaxed" style={{ color: '#4a5568' }}>{challenge.feedback}</p>
-          </div>
-        )}
+            {/* Feedback */}
+            {challenge?.feedback && (
+              <div
+                className="rounded-xl p-4"
+                style={{ background: 'white', border: '1px solid #e2e8f0' }}
+              >
+                <p className="text-xs font-semibold mb-2" style={{ color: '#2d3748' }}>Resumen</p>
+                <p className="text-xs leading-relaxed" style={{ color: '#4a5568' }}>{challenge.feedback}</p>
+              </div>
+            )}
 
-        {/* Strengths & improvements */}
-        <div className="grid grid-cols-2 gap-3">
-          {challenge.strengths?.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold mb-2" style={{ color: '#00C4A0' }}>Fortalezas</p>
-              <ul className="space-y-1.5">
-                {challenge.strengths.map((s, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: '#2d3748' }}>
-                    <span style={{ color: '#00C4A0', fontWeight: 700 }}>+</span> {s}
-                  </li>
-                ))}
-              </ul>
+            {/* Fortalezas */}
+            {(challenge?.strengths?.length ?? 0) > 0 && (
+              <div
+                className="rounded-xl p-4"
+                style={{ background: 'white', border: '1px solid #e2e8f0' }}
+              >
+                <p className="text-xs font-semibold mb-2.5" style={{ color: '#00C4A0' }}>Fortalezas</p>
+                <ul className="space-y-2">
+                  {challenge!.strengths.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#2d3748' }}>
+                      <span
+                        className="flex-shrink-0 flex items-center justify-center rounded-full text-white font-bold"
+                        style={{ width: 16, height: 16, background: '#00C4A0', fontSize: 10, marginTop: 1 }}
+                      >+</span>
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Mejoras */}
+            {(challenge?.improvements?.length ?? 0) > 0 && (
+              <div
+                className="rounded-xl p-4"
+                style={{ background: 'white', border: '1px solid #e2e8f0' }}
+              >
+                <p className="text-xs font-semibold mb-2.5" style={{ color: '#718096' }}>Áreas de mejora</p>
+                <ul className="space-y-2">
+                  {challenge!.improvements.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#718096' }}>
+                      <span className="flex-shrink-0 font-bold mt-0.5">→</span>
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Info candidato */}
+            <div
+              className="rounded-xl p-4 space-y-2"
+              style={{ background: 'white', border: '1px solid #e2e8f0' }}
+            >
+              <p className="text-xs font-semibold" style={{ color: '#2d3748' }}>Datos del candidato</p>
+              {[
+                { label: 'Teamtailor ID', value: candidate.teamtailorId },
+                { label: 'Registrado', value: format(new Date(candidate.createdAt), "d MMM yyyy", { locale: es }) },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-xs" style={{ color: '#a0aec0' }}>{label}</p>
+                  <p className="text-xs font-medium" style={{ color: '#2d3748' }}>{value}</p>
+                </div>
+              ))}
             </div>
-          )}
-          {challenge.improvements?.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold mb-2" style={{ color: '#718096' }}>Áreas de mejora</p>
-              <ul className="space-y-1.5">
-                {challenge.improvements.map((s, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: '#718096' }}>
-                    <span style={{ fontWeight: 700 }}>→</span> {s}
-                  </li>
-                ))}
-              </ul>
+          </div>
+
+          {/* Columna derecha — Conversación */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Sub-header del chat */}
+            <div
+              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+              style={{ borderBottom: '1px solid #e2e8f0', background: 'white' }}
+            >
+              <div className="flex items-center gap-2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="#00C4A0">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                </svg>
+                <p className="text-xs font-semibold" style={{ color: '#1e2a3a' }}>Transcripción de la conversación</p>
+              </div>
+              {!loading && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: '#f0f4f8', color: '#718096' }}
+                >
+                  {messages.length} mensajes
+                </span>
+              )}
             </div>
-          )}
+
+            {/* Mensajes */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: '#f7fafc' }}>
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <svg className="animate-spin" width="28" height="28" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#00C4A0" strokeWidth="4"/>
+                    <path className="opacity-75" fill="#00C4A0" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  <p className="text-xs" style={{ color: '#a0aec0' }}>Cargando conversación...</p>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-2">
+                  <p className="text-sm" style={{ color: '#a0aec0' }}>Sin mensajes registrados</p>
+                </div>
+              ) : (
+                messages.map((msg) => (
+                  <TranscriptBubble key={msg.id} msg={msg} />
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
         </div>
+      </div>
+    </>
+  )
+}
+
+function TranscriptBubble({ msg }: { msg: FullMessage }) {
+  const isBot = msg.role === 'assistant'
+  const time  = format(new Date(msg.createdAt), 'HH:mm', { locale: es })
+
+  return (
+    <div className={`flex items-end gap-2 ${isBot ? '' : 'flex-row-reverse'}`}>
+      {/* Avatar */}
+      <div
+        className="flex-shrink-0 flex items-center justify-center rounded-full text-white text-xs font-bold"
+        style={{
+          width: 28, height: 28,
+          background: isBot
+            ? 'linear-gradient(135deg, #00C4A0, #00A888)'
+            : 'linear-gradient(135deg, #2d3748, #1e2a3a)',
+        }}
+      >
+        {isBot ? (
+          <svg width="14" height="14" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="20" r="12" fill="white" opacity="0.95"/>
+            <rect x="14" y="36" width="36" height="22" rx="10" fill="white" opacity="0.95"/>
+          </svg>
+        ) : 'A'}
+      </div>
+
+      <div style={{ maxWidth: '70%' }}>
+        {/* Role label */}
+        <p
+          className={`text-xs mb-1 ${isBot ? 'text-left' : 'text-right'}`}
+          style={{ color: '#a0aec0' }}
+        >
+          {isBot ? 'Cliente simulado' : 'Candidato'}
+        </p>
+
+        {/* Bubble */}
+        <div
+          className="px-3.5 py-2.5 text-xs leading-relaxed"
+          style={{
+            background: isBot ? 'white' : 'linear-gradient(135deg, #00C4A0, #00A888)',
+            color: isBot ? '#1e2a3a' : 'white',
+            borderRadius: isBot ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
+            border: isBot ? '1px solid #e2e8f0' : 'none',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          }}
+        >
+          {msg.content}
+        </div>
+
+        <p
+          className={`text-xs mt-1 ${isBot ? 'text-left' : 'text-right'}`}
+          style={{ color: '#cbd5e0' }}
+        >
+          {time}
+        </p>
       </div>
     </div>
   )

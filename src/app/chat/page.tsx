@@ -24,13 +24,21 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load session
+  // Load session from server
   useEffect(() => {
-    const raw = sessionStorage.getItem('alegra_session')
-    if (!raw) { router.replace('/login'); return }
-    const s: SessionData = JSON.parse(raw)
-    if (s.role !== 'candidate') { router.replace('/admin'); return }
-    setSession(s)
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(data => {
+        if (data.error || data.role !== 'candidate') { router.replace('/login'); return }
+        setSession({
+          email: data.email,
+          role: 'candidate',
+          name: data.name,
+          candidateId: data.candidateId,
+          challengeId: data.challengeId,
+        })
+      })
+      .catch(() => router.replace('/login'))
   }, [router])
 
   // Load existing messages
@@ -69,7 +77,7 @@ export default function ChatPage() {
   // Auto-send greeting on first load
   useEffect(() => {
     if (!initialized || !session || messages.length > 0 || chatDone) return
-    sendMessage('Hola, estoy listo para comenzar.')
+    sendMessage('Hola, gracias por contactar al soporte de Alegra. ¿En qué te puedo ayudar hoy?')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized, session])
 
@@ -88,7 +96,7 @@ export default function ChatPage() {
     }
 
     // Only show user bubble if it's not the auto-greeting
-    if (text !== 'Hola, estoy listo para comenzar.') {
+    if (text !== 'Hola, gracias por contactar al soporte de Alegra. ¿En qué te puedo ayudar hoy?') {
       setMessages((prev) => [...prev, userMsg])
     }
 
@@ -227,7 +235,7 @@ export default function ChatPage() {
           </div>
 
           <p className="text-xs mt-4 leading-relaxed" style={{ color: '#718096' }}>
-            Responde las preguntas con honestidad. El equipo de Talent revisará tu evaluación.
+            Atiende al cliente como lo harías en soporte real. Sé claro, empático y preciso.
           </p>
         </div>
 
@@ -265,13 +273,13 @@ export default function ChatPage() {
             </svg>
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold" style={{ color: '#1e2a3a' }}>AlegraBot</p>
+            <p className="text-sm font-semibold" style={{ color: '#1e2a3a' }}>Carlos Mejía</p>
             <p className="text-xs flex items-center gap-1.5" style={{ color: '#718096' }}>
               <span
                 className="inline-block rounded-full"
                 style={{ width: 7, height: 7, background: chatDone ? '#a0aec0' : '#00C4A0' }}
               />
-              {chatDone ? 'Evaluación finalizada' : 'En línea · Evaluando'}
+              {chatDone ? 'Conversación finalizada' : 'Cliente · En línea'}
             </p>
           </div>
           {/* Mobile: candidate name */}
@@ -342,7 +350,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Escribe tu respuesta... (Enter para enviar)"
+                placeholder="Escribe tu respuesta como agente de soporte... (Enter para enviar)"
                 rows={1}
                 disabled={loading}
                 className="flex-1 resize-none rounded-xl px-4 py-3 text-sm outline-none transition-all"

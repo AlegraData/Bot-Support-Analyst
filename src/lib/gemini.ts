@@ -21,14 +21,13 @@ export async function sendMessageToGemini(
   newUserMessage: string
 ): Promise<{ text: string; evaluation: EvaluationResult | null; isComplete: boolean }> {
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-flash-lite',
     systemInstruction: BOT_SYSTEM_PROMPT,
     safetySettings,
     generationConfig: {
       temperature: 0.8,
-      topK: 40,
       topP: 0.95,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096,
     },
   })
 

@@ -3,6 +3,7 @@ node_modules/
 .pnp.js
 
 .next/
+.claude/
 out/
 dist/
 build/
