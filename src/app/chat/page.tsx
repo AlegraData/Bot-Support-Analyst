@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { SessionData, ChatMessage, EvaluationResult } from '@/lib/types'
@@ -248,8 +249,19 @@ function ChatPageContent() {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <p className="text-xs" style={{ color: '#4a5568' }}>© 2025 Alegra · Talent Bot</p>
+          <button
+            onClick={async () => {
+              const supabase = createClient()
+              await supabase.auth.signOut()
+              router.replace('/login')
+            }}
+            className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+            style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#718096' }}
+          >
+            Salir
+          </button>
         </div>
       </aside>
 
@@ -290,10 +302,18 @@ function ChatPageContent() {
               {chatDone ? 'Conversación finalizada' : 'Cliente · En línea'}
             </p>
           </div>
-          {/* Mobile: candidate name */}
-          <div className="md:hidden text-right">
-            <p className="text-xs font-medium" style={{ color: '#2d3748' }}>{session.name || session.email}</p>
-          </div>
+          {/* Mobile: salir */}
+          <button
+            onClick={async () => {
+              const supabase = createClient()
+              await supabase.auth.signOut()
+              router.replace('/login')
+            }}
+            className="md:hidden text-xs px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+            style={{ border: '1px solid #e2e8f0', color: '#718096' }}
+          >
+            Salir
+          </button>
         </header>
 
         {/* Messages */}
