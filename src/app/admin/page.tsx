@@ -285,6 +285,51 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+function Divider() {
+  return <span style={{ width: 1, height: 20, background: '#e2e8f0', flexShrink: 0 }} />
+}
+
+function ActionBtn({
+  children, onClick, title, color, hoverBg, disabled = false,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  title: string
+  color: string
+  hoverBg: string
+  disabled?: boolean
+}) {
+  const [hovered, setHovered] = useState(false)
+  const [pressed, setPressed] = useState(false)
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false) }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      style={{
+        padding: '7px 10px',
+        color: disabled ? '#d1d5db' : color,
+        background: disabled ? 'transparent' : pressed ? hoverBg.replace('0.08', '0.18') : hovered ? hoverBg : 'transparent',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transform: pressed && !disabled ? 'scale(0.88)' : 'scale(1)',
+        transition: 'background 0.15s, transform 0.1s',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: 'none',
+        outline: 'none',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 function CandidateRow({
   candidate, index, onRefresh, onViewDetail, onEdit,
 }: {
@@ -361,53 +406,44 @@ function CandidateRow({
         </p>
       </td>
       <td className="px-5 py-4">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onEdit}
-            className="p-1.5 rounded-lg transition-colors"
-            style={{ color: '#3B82F6', background: 'rgba(59,130,246,0.08)' }}
-            title="Editar candidato"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <div
+          className="inline-flex items-center rounded-xl overflow-hidden"
+          style={{ border: '1px solid #e2e8f0', background: 'white' }}
+        >
+          <ActionBtn onClick={onEdit} title="Editar" color="#3B82F6" hoverBg="rgba(59,130,246,0.08)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
             </svg>
-          </button>
+          </ActionBtn>
+
           {candidate.status === 'COMPLETED' && (
-            <button
-              onClick={onViewDetail}
-              className="p-1.5 rounded-lg transition-colors text-xs font-medium"
-              style={{ color: '#00A888', background: 'rgba(0,196,160,0.08)' }}
-              title="Ver detalle"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-              </svg>
-            </button>
+            <>
+              <Divider />
+              <ActionBtn onClick={onViewDetail} title="Ver detalle" color="#00A888" hoverBg="rgba(0,196,160,0.08)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                </svg>
+              </ActionBtn>
+            </>
           )}
+
           {candidate.status !== 'PENDING' && (
-            <button
-              onClick={handleReset}
-              disabled={resetting}
-              className="p-1.5 rounded-lg transition-colors"
-              style={{ color: '#718096', background: '#f0f4f8' }}
-              title="Reiniciar evaluación"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-              </svg>
-            </button>
+            <>
+              <Divider />
+              <ActionBtn onClick={handleReset} title="Reiniciar evaluación" color="#718096" hoverBg="rgba(113,128,150,0.08)" disabled={resetting}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                </svg>
+              </ActionBtn>
+            </>
           )}
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="p-1.5 rounded-lg transition-colors"
-            style={{ color: '#EF4444', background: 'rgba(239,68,68,0.08)' }}
-            title="Eliminar candidato"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+
+          <Divider />
+          <ActionBtn onClick={handleDelete} title="Eliminar candidato" color="#EF4444" hoverBg="rgba(239,68,68,0.08)" disabled={deleting}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
             </svg>
-          </button>
+          </ActionBtn>
         </div>
       </td>
     </tr>
