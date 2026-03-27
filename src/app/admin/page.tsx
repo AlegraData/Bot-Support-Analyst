@@ -88,14 +88,17 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex flex-col items-end">
-            <p className="text-xs font-medium" style={{ color: '#2d3748' }}>{session.email}</p>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium"
-              style={{ background: 'rgba(0,196,160,0.12)', color: '#00A888' }}
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center justify-center rounded-full text-white text-sm font-bold flex-shrink-0"
+              style={{ width: 36, height: 36, background: 'linear-gradient(135deg, #00C4A0, #00A888)' }}
             >
-              Admin
-            </span>
+              {(session.name || session.email)[0].toUpperCase()}
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <p className="text-sm font-semibold" style={{ color: '#1e2a3a' }}>{session.name || session.email}</p>
+              <span className="text-xs" style={{ color: '#00A888' }}>Administrador</span>
+            </div>
           </div>
           <button
             onClick={async () => {
@@ -103,9 +106,12 @@ export default function AdminPage() {
               await supabase.auth.signOut()
               router.replace('/login')
             }}
-            className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
             style={{ border: '1px solid #e2e8f0', color: '#718096' }}
           >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+            </svg>
             Salir
           </button>
         </div>
