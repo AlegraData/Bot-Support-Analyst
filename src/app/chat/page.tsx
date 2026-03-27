@@ -1,8 +1,6 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -10,6 +8,14 @@ import type { SessionData, ChatMessage, EvaluationResult } from '@/lib/types'
 import { getScoreLevel } from '@/lib/constants'
 
 export default function ChatPage() {
+  return (
+    <Suspense>
+      <ChatPageContent />
+    </Suspense>
+  )
+}
+
+function ChatPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isCompleted = searchParams.get('completed') === 'true'
