@@ -15,6 +15,7 @@ export default function AdminPage() {
   const [loadingData, setLoadingData] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateWithChallenge | null>(null)
+  const [editingCandidate, setEditingCandidate] = useState<CandidateWithChallenge | null>(null)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -196,6 +197,7 @@ export default function AdminPage() {
                       index={i}
                       onRefresh={() => fetchCandidates()}
                       onViewDetail={() => setSelectedCandidate(c)}
+                      onEdit={() => setEditingCandidate(c)}
                     />
                   ))}
                 </tbody>
@@ -221,6 +223,15 @@ export default function AdminPage() {
         <CandidateDetailModal
           candidate={selectedCandidate}
           onClose={() => setSelectedCandidate(null)}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editingCandidate && (
+        <EditCandidateModal
+          candidate={editingCandidate}
+          onClose={() => setEditingCandidate(null)}
+          onSuccess={() => { setEditingCandidate(null); fetchCandidates() }}
         />
       )}
     </div>
@@ -275,12 +286,13 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function CandidateRow({
-  candidate, index, onRefresh, onViewDetail,
+  candidate, index, onRefresh, onViewDetail, onEdit,
 }: {
   candidate: CandidateWithChallenge
   index: number
   onRefresh: () => void
   onViewDetail: () => void
+  onEdit: () => void
 }) {
   const [deleting, setDeleting] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -350,6 +362,16 @@ function CandidateRow({
       </td>
       <td className="px-5 py-4">
         <div className="flex items-center gap-1">
+          <button
+            onClick={onEdit}
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: '#3B82F6', background: 'rgba(59,130,246,0.08)' }}
+            title="Editar candidato"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+          </button>
           {candidate.status === 'COMPLETED' && (
             <button
               onClick={onViewDetail}
@@ -519,6 +541,84 @@ function AddCandidateModal({
   )
 }
 
+function EditCandidateModal({
+  candidate, onClose, onSuccess,
+}: {
+  candidate: CandidateWithChallenge; onClose: () => void; onSuccess: () => void
+}) {
+  const [form, setForm] = useState({ name: candidate.name, email: candidate.email, teamtailorId: candidate.teamtailorId })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.name || !form.email || !form.teamtailorId) return
+    setLoading(true)
+    setError('')
+    const res = await fetch(`/api/candidates/${candidate.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const data = await res.json()
+    setLoading(false)
+    if (!res.ok) { setError(data.error || 'Error al actualizar.'); return }
+    onSuccess()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-6 animate-slide-up"
+        style={{ background: 'white', boxShadow: '0 24px 64px rgba(0,0,0,0.18)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-base font-semibold" style={{ color: '#1e2a3a' }}>Editar candidato</h3>
+          <button onClick={onClose} className="flex items-center justify-center rounded-full w-8 h-8" style={{ background: '#f0f4f8', color: '#718096' }}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {[
+            { field: 'name' as const, label: 'Nombre completo', type: 'text' },
+            { field: 'email' as const, label: 'Correo electrónico', type: 'email' },
+            { field: 'teamtailorId' as const, label: 'ID de Teamtailor', type: 'text' },
+          ].map(({ field, label, type }) => (
+            <div key={field}>
+              <label className="block text-sm font-medium mb-1.5" style={{ color: '#2d3748' }}>{label}</label>
+              <input
+                type={type}
+                value={form[field]}
+                onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))}
+                required
+                className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                style={{ border: '1.5px solid #e2e8f0', background: '#f7fafc', color: '#1a202c' }}
+                onFocus={(e) => { e.currentTarget.style.border = '1.5px solid #00C4A0'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,196,160,0.12)'; e.currentTarget.style.background = 'white' }}
+                onBlur={(e) => { e.currentTarget.style.border = '1.5px solid #e2e8f0'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.background = '#f7fafc' }}
+              />
+            </div>
+          ))}
+
+          {error && (
+            <div className="text-xs p-3 rounded-xl" style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>{error}</div>
+          )}
+
+          <div className="flex gap-3 mt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium" style={{ border: '1.5px solid #e2e8f0', color: '#718096' }}>Cancelar</button>
+            <button type="submit" disabled={loading} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg, #00C4A0, #00A888)', boxShadow: '0 4px 12px rgba(0,196,160,0.3)' }}>
+              {loading ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function CandidateDetailModal({
   candidate, onClose,
 }: {
@@ -527,6 +627,8 @@ function CandidateDetailModal({
   const [detail, setDetail] = useState<CandidateFullDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [downloading, setDownloading] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [visible, setVisible] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -545,6 +647,24 @@ function CandidateDetailModal({
   function handleClose() {
     setVisible(false)
     setTimeout(onClose, 280)
+  }
+
+  async function handleSendToTeamtailor() {
+    setSending(true)
+    setSendResult(null)
+    try {
+      const res = await fetch(`/api/candidates/${candidate.id}/teamtailor`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setSendResult({ ok: true, msg: 'Comentario enviado exitosamente a Teamtailor.' })
+      } else {
+        setSendResult({ ok: false, msg: data.error || 'Error al enviar a Teamtailor.' })
+      }
+    } catch {
+      setSendResult({ ok: false, msg: 'No se pudo conectar con el servidor.' })
+    } finally {
+      setSending(false)
+    }
   }
 
   async function handleDownload() {
@@ -614,28 +734,79 @@ function CandidateDetailModal({
             </div>
           </div>
 
-          <button
-            onClick={handleDownload}
-            disabled={downloading || loading || !detail}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all"
-            style={{
-              background: downloading || loading ? '#a0aec0' : 'linear-gradient(135deg, #00C4A0, #00A888)',
-              boxShadow: downloading || loading ? 'none' : '0 4px 14px rgba(0,196,160,0.35)',
-              cursor: downloading || loading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {downloading ? (
-              <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4"/>
-                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-            ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-              </svg>
+          <div className="flex items-center gap-2">
+            {/* Teamtailor result message */}
+            {sendResult && (
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium animate-slide-up"
+                style={{
+                  background: sendResult.ok ? 'rgba(0,196,160,0.1)' : 'rgba(239,68,68,0.1)',
+                  color: sendResult.ok ? '#00A888' : '#DC2626',
+                  border: `1px solid ${sendResult.ok ? 'rgba(0,196,160,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                  maxWidth: 280,
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  {sendResult.ok
+                    ? <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    : <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                  }
+                </svg>
+                {sendResult.msg}
+              </div>
             )}
-            {downloading ? 'Generando...' : 'Descargar .docx'}
-          </button>
+
+            {/* Send to Teamtailor */}
+            <button
+              onClick={handleSendToTeamtailor}
+              disabled={sending || loading || !detail || candidate.status !== 'COMPLETED'}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={{
+                background: sending || loading ? '#f0f4f8' : 'white',
+                color: sending || loading ? '#a0aec0' : '#1e2a3a',
+                border: '1.5px solid #e2e8f0',
+                cursor: sending || loading ? 'not-allowed' : 'pointer',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+              }}
+              title="Enviar resumen de evaluación a Teamtailor"
+            >
+              {sending ? (
+                <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#a0aec0" strokeWidth="4"/>
+                  <path className="opacity-75" fill="#a0aec0" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              )}
+              {sending ? 'Enviando...' : 'Enviar a Teamtailor'}
+            </button>
+
+            {/* Download .docx */}
+            <button
+              onClick={handleDownload}
+              disabled={downloading || loading || !detail}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all"
+              style={{
+                background: downloading || loading ? '#a0aec0' : 'linear-gradient(135deg, #00C4A0, #00A888)',
+                boxShadow: downloading || loading ? 'none' : '0 4px 14px rgba(0,196,160,0.35)',
+                cursor: downloading || loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {downloading ? (
+                <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4"/>
+                  <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+              )}
+              {downloading ? 'Generando...' : 'Descargar .docx'}
+            </button>
+          </div>
         </div>
 
         {/* ── Body: dos columnas ── */}
