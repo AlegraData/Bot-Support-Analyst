@@ -14,6 +14,7 @@ const ADMINS = [
   { email: 'carolinau@alegra.com',          name: 'Carolina U' },
   { email: 'cristhian.luna@alegra.com',     name: 'Cristhian Luna' },
   { email: 'xiomara.bohorquez@alegra.com',  name: 'Xiomara Bohorquez' },
+  { email: 'alejandro.aguilar@alegra.com',  name: 'Alejandro Aguilar' },
 ]
 
 async function main() {
