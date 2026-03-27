@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAILS } from '@/lib/constants'
+import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const createSchema = z.object({
@@ -9,13 +9,16 @@ const createSchema = z.object({
   teamtailorId: z.string().min(1),
 })
 
-function isAdmin(req: NextRequest): boolean {
-  const email = req.headers.get('x-user-email') ?? ''
-  return ADMIN_EMAILS.includes(email.toLowerCase().trim())
+async function isAdmin(): Promise<boolean> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return false
+  const admin = await db.admin.findUnique({ where: { email: user.email.toLowerCase() } })
+  return !!admin
 }
 
-export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) {
+export async function GET(_req: NextRequest) {
+  if (!await isAdmin()) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
@@ -42,8 +45,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(candidates)
 }
 
-export async function POST(req: NextRequest) {
-  if (!isAdmin(req)) {
+export async function POST(req: NextRequest) {  // req used for body parsing
+  if (!await isAdmin()) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 

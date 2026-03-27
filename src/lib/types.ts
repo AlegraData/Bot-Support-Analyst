@@ -22,6 +22,32 @@ export interface EvaluationResult {
   improvements: string[]
 }
 
+export interface FullMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  createdAt: string
+}
+
+export interface CandidateFullDetail {
+  id: string
+  name: string
+  email: string
+  teamtailorId: string
+  status: string
+  createdAt: string
+  challenges: Array<{
+    id: string
+    score: number | null
+    feedback: string | null
+    strengths: string[]
+    improvements: string[]
+    completedAt: string | null
+    createdAt: string
+    messages: FullMessage[]
+  }>
+}
+
 export interface CandidateWithChallenge {
   id: string
   name: string

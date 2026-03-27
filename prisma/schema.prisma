@@ -58,6 +58,15 @@ enum MessageRole {
   system
 }
 
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  @@map("admins")
+}
+
 model KnowledgeBase {
   id        String   @id @default(cuid())
   title     String

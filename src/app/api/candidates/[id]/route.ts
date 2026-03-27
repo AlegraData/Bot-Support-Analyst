@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAILS } from '@/lib/constants'
+import { createClient } from '@/lib/supabase/server'
 
-function isAdmin(req: NextRequest): boolean {
-  const email = req.headers.get('x-user-email') ?? ''
-  return ADMIN_EMAILS.includes(email.toLowerCase().trim())
+async function isAdmin(): Promise<boolean> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return false
+  const admin = await db.admin.findUnique({ where: { email: user.email.toLowerCase() } })
+  return !!admin
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAdmin(req)) {
+  if (!await isAdmin()) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
@@ -34,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAdmin(req)) {
+  if (!await isAdmin()) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
@@ -46,7 +49,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
 // Reset candidate to PENDING
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAdmin(req)) {
+  if (!await isAdmin()) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 

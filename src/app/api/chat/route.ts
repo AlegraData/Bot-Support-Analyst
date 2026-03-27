@@ -41,11 +41,7 @@ export async function POST(req: NextRequest) {
       challenge.messages.map((m) => ({ role: m.role, content: m.content }))
     )
 
-    // First message: inject candidate name
-    const contextualMessage =
-      challenge.messages.length === 0
-        ? `Mi nombre es ${challenge.candidate.name}. ${message}`
-        : message
+    const contextualMessage = message
 
     // Call Gemini
     const { text, evaluation, isComplete } = await sendMessageToGemini(history, contextualMessage)
