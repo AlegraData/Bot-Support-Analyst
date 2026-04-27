@@ -47,6 +47,27 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   return NextResponse.json({ ok: true })
 }
 
+// Update candidate data (name, email, teamtailorId)
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!await isAdmin()) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const { name, email, teamtailorId } = await req.json()
+
+  if (!name || !email || !teamtailorId) {
+    return NextResponse.json({ error: 'Todos los campos son requeridos' }, { status: 400 })
+  }
+
+  const candidate = await db.candidate.update({
+    where: { id },
+    data: { name, email: email.toLowerCase(), teamtailorId },
+  })
+
+  return NextResponse.json(candidate)
+}
+
 // Reset candidate to PENDING
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!await isAdmin()) {

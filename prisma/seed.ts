@@ -11,7 +11,7 @@ const adapter = new PrismaPg(pool as any)
 const prisma  = new PrismaClient({ adapter })
 
 const ADMINS = [
-  { email: 'carolinau@alegra.com',          name: 'Carolina U' },
+  { email: 'carolinau@alegra.com',          name: 'Carolina Uriola' },
   { email: 'cristhian.luna@alegra.com',     name: 'Cristhian Luna' },
   { email: 'xiomara.bohorquez@alegra.com',  name: 'Xiomara Bohorquez' },
   { email: 'alejandro.aguilar@alegra.com',  name: 'Alejandro Aguilar' },
