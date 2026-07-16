@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { sendMessageToGemini, buildGeminiHistory } from '@/lib/gemini'
+import { sendMessageToLLM, buildChatHistory } from '@/lib/llm'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -36,15 +36,15 @@ export async function POST(req: NextRequest) {
       data: { challengeId, role: 'user', content: message },
     })
 
-    // Build history for Gemini (exclude current message)
-    const history = buildGeminiHistory(
+    // Build history for the LLM (exclude current message)
+    const history = buildChatHistory(
       challenge.messages.map((m) => ({ role: m.role, content: m.content }))
     )
 
     const contextualMessage = message
 
-    // Call Gemini
-    const { text, evaluation, isComplete } = await sendMessageToGemini(history, contextualMessage)
+    // Call DeepSeek via LiteLLM
+    const { text, evaluation, isComplete } = await sendMessageToLLM(history, contextualMessage)
 
     // Save bot response
     await db.message.create({

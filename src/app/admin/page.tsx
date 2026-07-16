@@ -8,6 +8,34 @@ import { createClient } from '@/lib/supabase/client'
 import type { SessionData, CandidateWithChallenge, CandidateFullDetail, FullMessage } from '@/lib/types'
 import { getScoreLevel } from '@/lib/constants'
 
+type TabKey = 'candidates' | 'system'
+
+interface ConnCheck {
+  ok: boolean
+  configured: boolean
+  latencyMs: number | null
+  error: string | null
+}
+
+interface SystemStatus {
+  ai: ConnCheck & {
+    provider: { id: string; displayName: string; baseUrl: string; model: string }
+  }
+  database: ConnCheck
+  teamtailor: ConnCheck
+  metrics: {
+    totalCandidates: number
+    pending: number
+    inProgress: number
+    completed: number
+    completionRate: number
+    avgScore: number | null
+    totalMessages: number
+    completedLast7Days: number
+  } | null
+  checkedAt: string
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const [session, setSession] = useState<SessionData | null>(null)
@@ -16,6 +44,9 @@ export default function AdminPage() {
   const [showForm, setShowForm] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateWithChallenge | null>(null)
   const [editingCandidate, setEditingCandidate] = useState<CandidateWithChallenge | null>(null)
+  const [tab, setTab] = useState<TabKey>('candidates')
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
+  const [checkingStatus, setCheckingStatus] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -37,9 +68,21 @@ export default function AdminPage() {
     setLoadingData(false)
   }, [])
 
+  const fetchSystemStatus = useCallback(async () => {
+    setCheckingStatus(true)
+    try {
+      const res = await fetch('/api/admin/status')
+      if (res.ok) setSystemStatus(await res.json())
+    } catch { /* silent */ }
+    setCheckingStatus(false)
+  }, [])
+
   useEffect(() => {
-    if (session) fetchCandidates()
-  }, [session, fetchCandidates])
+    if (session) {
+      fetchCandidates()
+      fetchSystemStatus()
+    }
+  }, [session, fetchCandidates, fetchSystemStatus])
 
   if (!session) return null
 
@@ -89,6 +132,11 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <AiStatusPill
+            status={systemStatus}
+            checking={checkingStatus}
+            onClick={() => setTab('system')}
+          />
           <div className="flex items-center gap-3">
             <div
               className="flex items-center justify-center rounded-full text-white text-sm font-bold flex-shrink-0"
@@ -119,6 +167,42 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+        {/* Tabs */}
+        <div
+          className="inline-flex items-center rounded-xl p-1 gap-1"
+          style={{ background: 'white', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+        >
+          {([
+            { key: 'candidates' as TabKey, label: 'Candidatos' },
+            { key: 'system' as TabKey, label: 'Sistema' },
+          ]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+              style={{
+                background: tab === key ? 'linear-gradient(135deg, #00C4A0, #00A888)' : 'transparent',
+                color: tab === key ? 'white' : '#718096',
+                boxShadow: tab === key ? '0 2px 8px rgba(0,196,160,0.3)' : 'none',
+              }}
+            >
+              {label}
+              {key === 'system' && systemStatus && (
+                <span
+                  className="inline-block rounded-full"
+                  style={{
+                    width: 7,
+                    height: 7,
+                    background: systemStatus.ai.ok ? (tab === key ? 'white' : '#00C4A0') : '#EF4444',
+                  }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'candidates' && (<>
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
@@ -205,6 +289,16 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+
+        </>)}
+
+        {tab === 'system' && (
+          <SystemTab
+            status={systemStatus}
+            checking={checkingStatus}
+            onRefresh={fetchSystemStatus}
+          />
+        )}
       </main>
 
       {/* Add candidate modal */}
@@ -260,6 +354,242 @@ function StatCard({
       </div>
       <p className="text-2xl font-bold" style={{ color }}>{value}</p>
       <p className="text-xs mt-0.5" style={{ color: '#718096' }}>{label}</p>
+    </div>
+  )
+}
+
+function Spinner({ size = 15, color = '#00C4A0' }: { size?: number; color?: string }) {
+  return (
+    <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke={color} strokeWidth="4" />
+      <path className="opacity-75" fill={color} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  )
+}
+
+function AiStatusPill({
+  status, checking, onClick,
+}: {
+  status: SystemStatus | null; checking: boolean; onClick: () => void
+}) {
+  const pending = checking || !status
+  const ok = status?.ai.ok ?? false
+
+  const bg = pending ? '#f0f4f8' : ok ? 'rgba(0,196,160,0.1)' : 'rgba(239,68,68,0.1)'
+  const color = pending ? '#718096' : ok ? '#00A888' : '#DC2626'
+  const border = pending ? '#e2e8f0' : ok ? 'rgba(0,196,160,0.3)' : 'rgba(239,68,68,0.3)'
+  const label = pending ? 'Verificando IA...' : ok ? 'IA operativa' : 'IA sin conexión'
+
+  return (
+    <button
+      onClick={onClick}
+      title="Ver estado del sistema"
+      className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+      style={{ background: bg, color, border: `1px solid ${border}` }}
+    >
+      {pending ? (
+        <Spinner size={12} color={color} />
+      ) : (
+        <span className="inline-block rounded-full" style={{ width: 7, height: 7, background: color }} />
+      )}
+      {label}
+    </button>
+  )
+}
+
+function SystemTab({
+  status, checking, onRefresh,
+}: {
+  status: SystemStatus | null; checking: boolean; onRefresh: () => void
+}) {
+  if (!status) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center py-16 gap-3 rounded-2xl animate-fade-in"
+        style={{ background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }}
+      >
+        <Spinner size={28} />
+        <p className="text-xs" style={{ color: '#a0aec0' }}>Verificando conexiones...</p>
+      </div>
+    )
+  }
+
+  const { ai, database, teamtailor, metrics } = status
+  const allOk = ai.ok && database.ok && teamtailor.ok
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+
+      {/* Banner de estado global */}
+      <div
+        className="flex items-center gap-3 px-5 py-4 rounded-2xl"
+        style={{
+          background: ai.ok ? 'rgba(0,196,160,0.08)' : 'rgba(239,68,68,0.08)',
+          border: `1.5px solid ${ai.ok ? 'rgba(0,196,160,0.35)' : 'rgba(239,68,68,0.35)'}`,
+        }}
+      >
+        <span className="text-xl">{ai.ok ? '✅' : '🚨'}</span>
+        <div className="flex-1">
+          <p className="text-sm font-bold" style={{ color: ai.ok ? '#00A888' : '#DC2626' }}>
+            {ai.ok
+              ? allOk
+                ? 'Todos los servicios están operativos'
+                : 'La IA está operativa, pero hay servicios con problemas'
+              : 'La IA no está respondiendo'}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: ai.ok ? '#2d3748' : '#991B1B' }}>
+            {ai.ok
+              ? 'Puedes enviar retos a los candidatos con normalidad.'
+              : 'No envíes retos hasta restablecer la conexión: los candidatos no recibirán respuesta del bot.'}
+          </p>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={checking}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all flex-shrink-0"
+          style={{
+            background: checking ? '#a0aec0' : 'linear-gradient(135deg, #00C4A0, #00A888)',
+            boxShadow: checking ? 'none' : '0 4px 12px rgba(0,196,160,0.3)',
+            cursor: checking ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {checking ? <Spinner size={14} color="white" /> : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+              <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+          )}
+          {checking ? 'Verificando...' : 'Probar conexiones'}
+        </button>
+      </div>
+
+      {/* Conexiones */}
+      <div>
+        <h2 className="text-base font-semibold mb-3" style={{ color: '#1e2a3a' }}>
+          Estado de conexiones
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <ConnCard
+            title="Inteligencia Artificial"
+            icon="🤖"
+            check={ai}
+            details={[
+              { label: 'Proveedor', value: `${ai.provider.displayName} (${ai.provider.id})` },
+              { label: 'Modelo', value: ai.provider.model },
+              { label: 'URL base', value: ai.provider.baseUrl },
+            ]}
+            featured
+          />
+          <ConnCard
+            title="Base de datos"
+            icon="🗄️"
+            check={database}
+            details={[{ label: 'Motor', value: 'PostgreSQL (Supabase)' }]}
+          />
+          <ConnCard
+            title="Teamtailor"
+            icon="🔗"
+            check={teamtailor}
+            details={[{ label: 'Uso', value: 'Envío de notas de evaluación' }]}
+          />
+        </div>
+        <p className="text-xs mt-3" style={{ color: '#a0aec0' }}>
+          Última verificación: {format(new Date(status.checkedAt), "d MMM yyyy, HH:mm:ss", { locale: es })}
+        </p>
+      </div>
+
+      {/* Métricas */}
+      {metrics && (
+        <div>
+          <h2 className="text-base font-semibold mb-3" style={{ color: '#1e2a3a' }}>
+            Métricas generales
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard label="Total candidatos" value={metrics.totalCandidates} icon="👥" color="#1e2a3a" />
+            <StatCard
+              label="Tasa de finalización (%)"
+              value={metrics.completionRate}
+              icon="🎯"
+              color="#00C4A0"
+            />
+            <StatCard
+              label="Puntaje promedio"
+              value={metrics.avgScore != null ? Number(metrics.avgScore.toFixed(1)) : 0}
+              icon="⭐"
+              color="#F59E0B"
+              extra={metrics.avgScore != null ? '/10' : undefined}
+            />
+            <StatCard label="Mensajes intercambiados" value={metrics.totalMessages} icon="💬" color="#3B82F6" />
+            <StatCard label="Pendientes" value={metrics.pending} icon="⏳" color="#F59E0B" />
+            <StatCard label="En progreso" value={metrics.inProgress} icon="💬" color="#3B82F6" />
+            <StatCard label="Completados" value={metrics.completed} icon="✅" color="#00C4A0" />
+            <StatCard label="Completados (últimos 7 días)" value={metrics.completedLast7Days} icon="📅" color="#8B5CF6" />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ConnCard({
+  title, icon, check, details, featured = false,
+}: {
+  title: string
+  icon: string
+  check: ConnCheck
+  details: { label: string; value: string }[]
+  featured?: boolean
+}) {
+  const statusColor = check.ok ? '#00C4A0' : '#EF4444'
+  const statusLabel = !check.configured ? 'Sin configurar' : check.ok ? 'Conectado' : 'Sin conexión'
+
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{
+        background: 'white',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+        border: featured ? `1.5px solid ${check.ok ? 'rgba(0,196,160,0.4)' : 'rgba(239,68,68,0.4)'}` : '1px solid #e2e8f0',
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{icon}</span>
+          <p className="text-sm font-semibold" style={{ color: '#1e2a3a' }}>{title}</p>
+        </div>
+        <span
+          className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
+          style={{
+            background: check.ok ? 'rgba(0,196,160,0.12)' : 'rgba(239,68,68,0.12)',
+            color: check.ok ? '#00A888' : '#DC2626',
+          }}
+        >
+          <span className="inline-block rounded-full" style={{ width: 6, height: 6, background: statusColor }} />
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {details.map(({ label, value }) => (
+          <div key={label}>
+            <p className="text-xs" style={{ color: '#a0aec0' }}>{label}</p>
+            <p className="text-xs font-medium break-all" style={{ color: '#2d3748' }}>{value}</p>
+          </div>
+        ))}
+        <div>
+          <p className="text-xs" style={{ color: '#a0aec0' }}>Latencia</p>
+          <p className="text-xs font-medium" style={{ color: '#2d3748' }}>
+            {check.latencyMs != null ? `${check.latencyMs} ms` : '—'}
+          </p>
+        </div>
+        {check.error && (
+          <div
+            className="text-xs p-2.5 rounded-lg mt-1"
+            style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
+          >
+            {check.error}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

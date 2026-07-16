@@ -29,12 +29,13 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars=DATABASE_URL=$_DATABASE_URL,GEMINI_API_KEY=$_GEMINI_API_KEY,NEXT_PUBLIC_APP_URL=$_NEXT_PUBLIC_APP_URL'
+      - '--set-env-vars=DATABASE_URL=$_DATABASE_URL,LITELLM_API_KEY=$_LITELLM_API_KEY,LITELLM_BASE_URL=$_LITELLM_BASE_URL,NEXT_PUBLIC_APP_URL=$_NEXT_PUBLIC_APP_URL'
 
 substitutions:
   _NEXT_PUBLIC_APP_URL: ''
   _DATABASE_URL: ''
-  _GEMINI_API_KEY: ''
+  _LITELLM_API_KEY: ''
+  _LITELLM_BASE_URL: 'https://almost-litellm.alegra.com/v1'
 
 options:
   logging: CLOUD_LOGGING_ONLY
